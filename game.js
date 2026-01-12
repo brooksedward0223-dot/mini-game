@@ -52,10 +52,44 @@ function createScene() {
   controls.getObject().position.set(CELL/2, 1.6, CELL/2); // initial, will override
   scene.add(controls.getObject());
 
-  // pointer lock handling
+  // pointer lock handling: request from the canvas element directly for better browser compatibility
   startBtn.addEventListener('click', () => {
     overlay.style.display = 'none';
-    controls.lock();
+    const target = (renderer && renderer.domElement) ? renderer.domElement : document.body;
+    try {
+      if (target.requestPointerLock) {
+        target.requestPointerLock();
+      } else {
+        // fallback to controls.lock() which will call requestPointerLock internally
+        controls.lock();
+      }
+    } catch (err) {
+      console.error('Pointer lock request failed:', err);
+      messageEl.textContent = 'Pointer lock request failed. See console for details.';
+      overlay.style.display = 'flex';
+    }
+  });
+
+  // handle pointer lock change/error globally so we can show messages if it fails
+  document.addEventListener('pointerlockchange', () => {
+    const pl = document.pointerLockElement;
+    const canvas = renderer && renderer.domElement;
+    if (pl === canvas) {
+      // locked by canvas; trigger startRun (controls.lock event will also fire)
+      // nothing to do here; controls.addEventListener('lock') will call startRun
+    } else {
+      // pointer locked elsewhere or unlocked
+      if (!finished) {
+        overlay.style.display = 'flex';
+        messageEl.textContent = 'Paused — click Start Game to continue';
+      }
+    }
+  });
+
+  document.addEventListener('pointerlockerror', (e) => {
+    console.error('Pointer lock error', e);
+    overlay.style.display = 'flex';
+    messageEl.textContent = 'Unable to lock pointer — try a different browser or allow pointer capture.';
   });
 
   controls.addEventListener('lock', () => {
